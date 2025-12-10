@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 AI Voice Assistant - E-Commerce Inventory</title>
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+
+    <!-- Marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-robot"></i>
+                    <span>AI Voice Assistant</span>
+                </div>
+                <div class="header-stats">
+                    <div class="stat-item">
+                        <i class="fas fa-database"></i>
+                        <span id="total-products">-</span>
+                        <small>Products</small>
+                    </div>
+                    <div class="stat-item">
+                        <i class="fas fa-warehouse"></i>
+                        <span id="total-stock">-</span>
+                        <small>Stock</small>
+                    </div>
+                    <div class="stat-item">
+                        <i class="fas fa-star"></i>
+                        <span id="avg-rating">-</span>
+                        <small>Avg Rating</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-container">
+        <div class="container">
+            <div class="chat-layout">
+                <!-- Sidebar -->
+                <aside class="sidebar">
+                    <div class="sidebar-section">
+                        <h3><i class="fas fa-lightbulb"></i> Example Queries</h3>
+                        <div class="example-queries">
+                            <button class="example-btn" data-query="Fire TV Stick'ten kaç tane stokta var?">
+                                <i class="fas fa-tv"></i>
+                                Fire TV stock count
+                            </button>
+                            <button class="example-btn" data-query="En yüksek rating'li Electronics ürünü hangisi?">
+                                <i class="fas fa-star"></i>
+                                Top rated electronics
+                            </button>
+                            <button class="example-btn" data-query="Melbourne'da stock 150 üzeri kaç ürün var?">
+                                <i class="fas fa-warehouse"></i>
+                                Melbourne high stock
+                            </button>
+                            <button class="example-btn" data-query="Sydney'de en ucuz earbuds hangisi?">
+                                <i class="fas fa-headphones"></i>
+                                Cheapest earbuds
+                            </button>
+                            <button class="example-btn" data-query="Low stock alert olan ürünler hangileri?">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                Low stock alerts
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="sidebar-section">
+                        <h3><i class="fas fa-chart-pie"></i> Quick Stats</h3>
+                        <div class="quick-stats">
+                            <div class="stat-card">
+                                <div class="stat-label">Low Stock Items</div>
+                                <div class="stat-value" id="low-stock-count">-</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Avg Price</div>
+                                <div class="stat-value" id="avg-price">-</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="sidebar-section">
+                        <h3><i class="fas fa-cog"></i> Settings</h3>
+                        <div class="settings">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="auto-speak" checked>
+                                <span class="slider"></span>
+                                <span class="label-text">Auto-speak responses</span>
+                            </label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="continuous-listening">
+                                <span class="slider"></span>
+                                <span class="label-text">Continuous listening</span>
+                            </label>
+                        </div>
+                    </div>
+                </aside>
+
+                <!-- Chat Area -->
+                <div class="chat-container">
+                    <!-- Welcome Message -->
+                    <div class="welcome-message" id="welcome-message">
+                        <div class="welcome-icon">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <h1>Welcome to AI Voice Assistant</h1>
+                        <p>Your intelligent e-commerce inventory assistant with voice capabilities</p>
+                        <div class="welcome-features">
+                            <div class="feature">
+                                <i class="fas fa-microphone"></i>
+                                <span>Voice Input</span>
+                            </div>
+                            <div class="feature">
+                                <i class="fas fa-volume-up"></i>
+                                <span>Voice Output</span>
+                            </div>
+                            <div class="feature">
+                                <i class="fas fa-comments"></i>
+                                <span>Natural Language</span>
+                            </div>
+                            <div class="feature">
+                                <i class="fas fa-bolt"></i>
+                                <span>Real-time</span>
+                            </div>
+                        </div>
+                        <button class="start-btn" onclick="startConversation()">
+                            <i class="fas fa-play"></i> Start Conversation
+                        </button>
+                    </div>
+
+                    <!-- Messages Area -->
+                    <div class="messages" id="messages"></div>
+
+                    <!-- Thinking Indicator -->
+                    <div class="thinking-indicator" id="thinking-indicator" style="display: none;">
+                        <div class="thinking-dots">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                        <span class="thinking-text">AI is thinking...</span>
+                    </div>
+
+                    <!-- Voice Visualizer -->
+                    <div class="voice-visualizer" id="voice-visualizer" style="display: none;">
+                        <canvas id="visualizer-canvas"></canvas>
+                        <div class="visualizer-text">Listening...</div>
+                    </div>
+
+                    <!-- Input Area -->
+                    <div class="input-area">
+                        <div class="input-container">
+                            <button class="voice-btn" id="voice-btn" title="Click to speak">
+                                <i class="fas fa-microphone"></i>
+                            </button>
+                            <input
+                                type="text"
+                                id="question-input"
+                                placeholder="Type your question or click the microphone to speak..."
+                                autocomplete="off"
+                            >
+                            <button class="send-btn" id="send-btn" title="Send message">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                        <div class="input-hint">
+                            <i class="fas fa-info-circle"></i>
+                            <span>Press <kbd>Enter</kbd> to send, or click <i class="fas fa-microphone"></i> to use voice</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Status Toast -->
+    <div class="toast" id="toast"></div>
+
+    <!-- Custom JavaScript -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

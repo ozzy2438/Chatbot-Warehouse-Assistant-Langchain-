@@ -1,0 +1,52 @@
+AI OPERATIONS ASSISTANT - DATA SCHEMA
+=====================================
+
+PROJECT PURPOSE:
+E-commerce inventory and product management system for natural language queries.
+Example queries: "How many Fire TV Sticks in stock?", "What's the highest-rated Electronics product?"
+
+=====================================
+FIELD DESCRIPTIONS
+=====================================
+
+PRODUCT IDENTIFICATION
+----------------------
+asin: Amazon Standard Identification Number (unique product ID)
+product_name: Full product name/title
+product_link: URL to Amazon product page
+category: Product category (Electronics, Books, etc.)
+rank: Bestseller rank within category
+
+PRICING & RATINGS
+-----------------
+price: Product price in USD (cleaned, numeric)
+rating: Customer rating (0-5 scale)
+review_count: Total number of customer reviews
+is_prime: Prime eligibility (Yes/No)
+
+INVENTORY MANAGEMENT
+--------------------
+stock_quantity: Current units in stock (0-500)
+warehouse_location: Storage location (Melbourne, Sydney, Brisbane, Perth)
+restock_date: Scheduled restock date
+supplier_lead_time_days: Days required for supplier delivery (3-14)
+minimum_stock_threshold: Minimum stock level before restock alert (10-50)
+last_sold_date: Most recent sale date
+daily_sales_avg: Average daily sales volume (1-50)
+
+CUSTOMER SATISFACTION METRICS
+------------------------------
+sentiment_score: Rating converted to 100-point scale (rating × 20)
+satisfaction_level: Categorical rating (Excellent/Good/Average/Poor)
+recommendation_score: Percentage recommendation score ((rating/5) × 100)
+complaint_risk: Risk level based on rating (High if <4.0, else Low)
+
+AI-READY FIELDS
+---------------
+product_description: Natural language summary of product details
+similar_price_alternatives: Pipe-separated ASINs of similar-priced products (within 30%)
+higher_rated_alternatives: Pipe-separated ASINs of higher-rated alternatives
+
+METADATA
+--------
+scraped_at: Data collection timestamp

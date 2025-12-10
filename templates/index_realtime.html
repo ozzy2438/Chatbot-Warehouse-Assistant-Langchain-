@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Warehouse Operations</title>
+
+    <script src="{{ url_for('static', filename='socket.io.min.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        #world {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            background: radial-gradient(circle at center, transparent 60%, rgba(0, 10, 20, 0.9));
+        }
+
+        .chat-panel {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            bottom: 100px;
+            width: 350px;
+            background: rgba(0, 5, 15, 0.85);
+            border: 1px solid #0ff;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.1);
+            border-radius: 5px;
+            pointer-events: auto;
+            display: flex;
+            flex-direction: column;
+            backdrop-filter: blur(4px);
+        }
+
+        #messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            color: #cef;
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 0.9rem;
+        }
+
+        .msg {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 4px;
+        }
+
+        .msg.bot {
+            border-left: 2px solid #0ff;
+            background: rgba(0, 255, 255, 0.05);
+        }
+
+        .msg.user {
+            border-right: 2px solid #f0f;
+            background: rgba(255, 0, 255, 0.05);
+            text-align: right;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            pointer-events: auto;
+            width: 500px;
+        }
+
+        .cyber-input {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #0ff;
+            color: #0ff;
+            padding: 12px;
+            outline: none;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.2);
+        }
+
+        .cyber-btn {
+            width: 50px;
+            background: rgba(0, 20, 40, 0.8);
+            border: 1px solid #0ff;
+            color: #0ff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .cyber-btn.recording {
+            background: #500;
+            border-color: #f00;
+            color: #fff;
+            animation: pulse 0.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.1);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        /* Overlay status */
+        .status-overlay {
+            position: absolute;
+            top: 20%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #0ff;
+            font-size: 2rem;
+            text-shadow: 0 0 20px #0ff;
+            display: none;
+            letter-spacing: 5px;
+            text-align: center;
+        }
+
+        /* Warehouse Title */
+        .warehouse-title {
+            position: absolute;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #ff9900;
+            text-shadow: 0 0 30px rgba(255, 153, 0, 0.8), 0 0 10px rgba(255, 153, 0, 0.5);
+            letter-spacing: 8px;
+            pointer-events: none;
+            z-index: 100;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+    <div id="world"></div>
+
+    <div id="hud">
+        <div class="warehouse-title">AMAZON WAREHOUSE</div>
+        <div class="status-overlay" id="searchStatus">SCANNING INVENTORY...</div>
+
+        <div class="chat-panel">
+            <div style="padding: 10px; border-bottom: 1px solid #0ff; color: #0ff; font-size: 0.8rem;">
+                <i class="fas fa-terminal"></i> SYSTEM LOGS
+            </div>
+            <div id="messages">
+                <div class="msg bot">System Online. Ready for queries.</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <input type="text" class="cyber-input" id="textInput" placeholder="Command...">
+            <button class="cyber-btn" id="micBtn"><i class="fas fa-microphone"></i></button>
+        </div>
+    </div>
+
+    <script>
+        // --- THREE.JS SETUP ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a2332); // Soft dark blue-gray
+        scene.fog = new THREE.FogExp2(0x1a2332, 0.02);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.getElementById('world').appendChild(renderer.domElement);
+
+        // --- LIGHTS (Soft Industrial) ---
+        const ambientLight = new THREE.AmbientLight(0x8899aa, 0.6);
+        scene.add(ambientLight);
+
+        // Warm overhead factory lights
+        const mainLight = new THREE.DirectionalLight(0xffeedd, 0.8);
+        mainLight.position.set(10, 20, 10);
+        scene.add(mainLight);
+
+        // Cool fill light
+        const fillLight = new THREE.DirectionalLight(0x6688aa, 0.4);
+        fillLight.position.set(-10, 10, -10);
+        scene.add(fillLight);
+
+        // --- FACTORY FLOOR ---
+        const floorGeo = new THREE.PlaneGeometry(200, 200);
+        const floorMat = new THREE.MeshPhongMaterial({ color: 0x3a4555, specular: 0x222222 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -0.01;
+        scene.add(floor);
+
+        // Floor markings (safety lines)
+        const lineGeo = new THREE.PlaneGeometry(4, 80);
+        const lineMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+        const centerLine = new THREE.Mesh(lineGeo, lineMat);
+        centerLine.rotation.x = -Math.PI / 2;
+        centerLine.position.y = 0.01;
+        scene.add(centerLine);
+
+        // --- INDUSTRIAL SHELVING (Realistic Racking) ---
+        const shelves = new THREE.Group();
+        const metalMat = new THREE.MeshPhongMaterial({ color: 0x667788, specular: 0x444444, shininess: 30 });
+        const orangeMat = new THREE.MeshPhongMaterial({ color: 0xee7722 }); // Safety orange
+
+        function createRack(xPos) {
+            const rack = new THREE.Group();
+
+            // Vertical posts (4 corners)
+            const postGeo = new THREE.BoxGeometry(0.15, 7, 0.15);
+            for (let pz = -2; pz <= 2; pz += 4) {
+                for (let px = -0.6; px <= 0.6; px += 1.2) {
+                    const post = new THREE.Mesh(postGeo, orangeMat);
+                    post.position.set(px, 3.5, pz);
+                    rack.add(post);
+                }
+            }
+
+            // Horizontal beams (shelves)
+            const beamGeo = new THREE.BoxGeometry(1.5, 0.1, 4.5);
+            for (let y = 1; y <= 6; y += 1.5) {
+                const beam = new THREE.Mesh(beamGeo, metalMat);
+                beam.position.set(0, y, 0);
+                rack.add(beam);
+            }
+
+            // Products on each level
+            for (let y = 1.1; y <= 5.5; y += 1.5) {
+                for (let z = -1.5; z <= 1.5; z += 1) {
+                    if (Math.random() > 0.15) {
+                        const boxH = 0.4 + Math.random() * 0.6;
+                        const boxGeo = new THREE.BoxGeometry(0.8, boxH, 0.7);
+                        // Varied cardboard/plastic colors
+                        const colors = [0x8b7355, 0x9a8b7a, 0x6b8e9f, 0x4a6670, 0xc4a35a, 0x7a6b5a];
+                        const boxMat = new THREE.MeshPhongMaterial({
+                            color: colors[Math.floor(Math.random() * colors.length)]
+                        });
+                        const box = new THREE.Mesh(boxGeo, boxMat);
+                        box.position.set(0, y + boxH / 2, z);
+                        rack.add(box);
+                    }
+                }
+            }
+
+            rack.position.x = xPos;
+            return rack;
+        }
+
+        // Create aisles
+        for (let x = -24; x <= 24; x += 8) {
+            if (Math.abs(x) < 4) continue; // Robot path
+            for (let z = -30; z <= 30; z += 6) {
+                const rack = createRack(x);
+                rack.position.z = z;
+                shelves.add(rack);
+            }
+        }
+        scene.add(shelves);
+
+        // --- ROBOT WITH ARMS ---
+        const robotGroup = new THREE.Group();
+        const robotMat = new THREE.MeshPhongMaterial({ color: 0x4488cc, specular: 0xffffff, shininess: 80 });
+        const darkMat = new THREE.MeshPhongMaterial({ color: 0x333344, specular: 0x666666 });
+        const glowMat = new THREE.MeshBasicMaterial({ color: 0x00ffaa });
+
+        // Main Body (rounded box using sphere)
+        const bodyGeo = new THREE.SphereGeometry(0.7, 32, 32);
+        const body = new THREE.Mesh(bodyGeo, robotMat);
+        body.scale.set(1, 0.8, 0.7);
+        robotGroup.add(body);
+
+        // Face Visor
+        const visorGeo = new THREE.BoxGeometry(0.8, 0.25, 0.1);
+        const visorMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc });
+        const visor = new THREE.Mesh(visorGeo, visorMat);
+        visor.position.set(0, 0.1, 0.5);
+        robotGroup.add(visor);
+
+        // --- ARMS ---
+        function createArm(side) {
+            const arm = new THREE.Group();
+
+            // Shoulder joint
+            const shoulderGeo = new THREE.SphereGeometry(0.15, 16, 16);
+            const shoulder = new THREE.Mesh(shoulderGeo, darkMat);
+            arm.add(shoulder);
+
+            // Upper arm
+            const upperArmGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.5, 8);
+            const upperArm = new THREE.Mesh(upperArmGeo, robotMat);
+            upperArm.position.y = -0.3;
+            arm.add(upperArm);
+
+            // Elbow
+            const elbowGeo = new THREE.SphereGeometry(0.1, 16, 16);
+            const elbow = new THREE.Mesh(elbowGeo, darkMat);
+            elbow.position.y = -0.55;
+            arm.add(elbow);
+
+            // Forearm
+            const forearmGeo = new THREE.CylinderGeometry(0.06, 0.08, 0.4, 8);
+            const forearm = new THREE.Mesh(forearmGeo, robotMat);
+            forearm.position.y = -0.8;
+            arm.add(forearm);
+
+            // Hand (gripper)
+            const handGeo = new THREE.BoxGeometry(0.15, 0.15, 0.08);
+            const hand = new THREE.Mesh(handGeo, glowMat);
+            hand.position.y = -1.05;
+            arm.add(hand);
+
+            // Fingers
+            const fingerGeo = new THREE.BoxGeometry(0.04, 0.12, 0.04);
+            const finger1 = new THREE.Mesh(fingerGeo, darkMat);
+            finger1.position.set(-0.05, -1.15, 0);
+            arm.add(finger1);
+            const finger2 = new THREE.Mesh(fingerGeo, darkMat);
+            finger2.position.set(0.05, -1.15, 0);
+            arm.add(finger2);
+
+            arm.position.set(side * 0.75, 0.2, 0);
+            return arm;
+        }
+
+        const leftArm = createArm(-1);
+        const rightArm = createArm(1);
+        robotGroup.add(leftArm);
+        robotGroup.add(rightArm);
+
+        // Hover Engine
+        const engineGeo = new THREE.CylinderGeometry(0.3, 0.4, 0.2, 16);
+        const engine = new THREE.Mesh(engineGeo, darkMat);
+        engine.position.y = -0.7;
+        robotGroup.add(engine);
+
+        // Engine Glow
+        const glowRingGeo = new THREE.TorusGeometry(0.35, 0.05, 8, 32);
+        const glowRing = new THREE.Mesh(glowRingGeo, glowMat);
+        glowRing.rotation.x = Math.PI / 2;
+        glowRing.position.y = -0.8;
+        robotGroup.add(glowRing);
+
+        // --- CATEGORY TEXTURES ---
+        function createCategoryTexture(category) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            // Background color based on category
+            const colors = {
+                'Books': '#8b4513',
+                'Electronics': '#1e90ff',
+                'Clothing': '#ff69b4',
+                'Home': '#32cd32'
+            };
+
+            ctx.fillStyle = colors[category] || '#ffaa00';
+            ctx.fillRect(0, 0, 256, 256);
+
+            // Border
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 8;
+            ctx.strokeRect(4, 4, 248, 248);
+
+            // Icon (emoji-style)
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 80px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            const icons = {
+                'Books': '📚',
+                'Electronics': '💻',
+                'Clothing': '👕',
+                'Home': '🏠'
+            };
+
+            ctx.fillText(icons[category] || '📦', 128, 100);
+
+            // Text label
+            ctx.font = 'bold 28px Arial';
+            ctx.fillText(category.toUpperCase(), 128, 180);
+
+            const texture = new THREE.Texture(canvas);
+            texture.needsUpdate = true;
+            return texture;
+        }
+
+        // Create materials for each category
+        const categoryMaterials = {
+            'Books': new THREE.MeshPhongMaterial({
+                map: createCategoryTexture('Books'),
+                emissive: 0x2a1a0a
+            }),
+            'Electronics': new THREE.MeshPhongMaterial({
+                map: createCategoryTexture('Electronics'),
+                emissive: 0x0a1a2a
+            }),
+            'Clothing': new THREE.MeshPhongMaterial({
+                map: createCategoryTexture('Clothing'),
+                emissive: 0x2a0a1a
+            }),
+            'Home': new THREE.MeshPhongMaterial({
+                map: createCategoryTexture('Home'),
+                emissive: 0x0a2a0a
+            })
+        };
+
+        // Held Item (shown when presenting)
+        const heldItemGeo = new THREE.BoxGeometry(0.5, 0.5, 0.4);
+        const heldItem = new THREE.Mesh(heldItemGeo, categoryMaterials['Electronics']);
+        heldItem.position.set(0, -0.3, 0.8);
+        heldItem.visible = false;
+        robotGroup.add(heldItem);
+
+        // Random category selector
+        const categories = ['Books', 'Electronics', 'Clothing', 'Home'];
+        let currentCategory = 'Electronics';
+
+        scene.add(robotGroup);
+
+        // --- ANIMATION STATE ---
+        let robotState = 'idle';
+        let searchTime = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const time = Date.now() * 0.001;
+
+            // Robot Hover (always active)
+            robotGroup.position.y = 2 + Math.sin(time * 2) * 0.15;
+
+            if (robotState === 'idle') {
+                // Gentle floating in center
+                robotGroup.rotation.y = Math.sin(time * 0.5) * 0.2;
+                robotGroup.rotation.z = Math.sin(time * 0.8) * 0.05;
+
+                // Arms relaxed
+                leftArm.rotation.x = Math.sin(time) * 0.1;
+                leftArm.rotation.z = 0;
+                rightArm.rotation.x = -Math.sin(time) * 0.1;
+                rightArm.rotation.z = 0;
+
+                heldItem.visible = false;
+
+                // Slowly return to center
+                robotGroup.position.x += (0 - robotGroup.position.x) * 0.02;
+                robotGroup.position.z += (0 - robotGroup.position.z) * 0.02;
+
+                // Camera: relaxed view
+                camera.position.lerp(new THREE.Vector3(0, 3, 10), 0.03);
+                camera.lookAt(robotGroup.position);
+
+            } else if (robotState === 'searching') {
+                searchTime += 0.016;
+
+                // Move between shelves
+                robotGroup.position.x = Math.sin(time * 1.5) * 6;
+                robotGroup.position.z = Math.cos(time * 0.8) * 20;
+                robotGroup.position.y = 3 + Math.sin(time * 3) * 0.5;
+
+                // Look toward shelves (side to side)
+                const lookSide = Math.sin(time * 2) > 0 ? 1 : -1;
+                robotGroup.rotation.y = lookSide * 0.8 + Math.sin(time * 4) * 0.3;
+                robotGroup.rotation.z = Math.sin(time * 2) * 0.15;
+
+                // Arms reaching toward shelves!
+                if (lookSide > 0) {
+                    // Reaching right
+                    rightArm.rotation.x = -0.3 + Math.sin(time * 5) * 0.3;
+                    rightArm.rotation.z = 0.5 + Math.sin(time * 3) * 0.2;
+                    leftArm.rotation.x = 0.2;
+                    leftArm.rotation.z = 0;
+                } else {
+                    // Reaching left
+                    leftArm.rotation.x = -0.3 + Math.sin(time * 5) * 0.3;
+                    leftArm.rotation.z = -0.5 - Math.sin(time * 3) * 0.2;
+                    rightArm.rotation.x = 0.2;
+                    rightArm.rotation.z = 0;
+                }
+
+                heldItem.visible = false;
+
+                // Camera follows from behind
+                const camOffset = new THREE.Vector3(
+                    robotGroup.position.x * 0.3,
+                    robotGroup.position.y + 2,
+                    robotGroup.position.z + 8
+                );
+                camera.position.lerp(camOffset, 0.08);
+                camera.lookAt(robotGroup.position);
+
+            } else if (robotState === 'talking') {
+                // Fly toward camera and present item
+                const targetPos = new THREE.Vector3(0, 2.5, 4);
+                robotGroup.position.lerp(targetPos, 0.08);
+
+                // Face camera
+                robotGroup.rotation.y = Math.sin(time * 1.5) * 0.1;
+                robotGroup.rotation.z = 0;
+                robotGroup.rotation.x = 0;
+
+                // Both arms holding item forward
+                leftArm.rotation.x = -0.6;
+                leftArm.rotation.z = -0.4;
+                rightArm.rotation.x = -0.6;
+                rightArm.rotation.z = 0.4;
+
+                // Show the found item!
+                heldItem.visible = true;
+                heldItem.rotation.y = time * 2;
+
+                // Visor pulses
+                visor.material.color.setHSL(0.45 + Math.sin(time * 10) * 0.05, 1, 0.6);
+
+                // Camera: close up
+                camera.position.lerp(new THREE.Vector3(0, 2.5, 8), 0.05);
+                camera.lookAt(robotGroup.position);
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // --- SOCKET LOGIC ---
+        const socket = io();
+        const msgs = document.getElementById('messages');
+        const statusOverlay = document.getElementById('searchStatus');
+
+        function log(text, sender) {
+            const div = document.createElement('div');
+            div.className = `msg ${sender}`;
+            div.innerHTML = sender === 'bot' ? marked.parse(text) : text;
+            msgs.appendChild(div);
+            msgs.scrollTop = msgs.scrollHeight;
+        }
+
+        socket.on('processing', (data) => {
+            robotState = 'searching';
+            statusOverlay.style.display = 'block';
+            statusOverlay.innerText = data.status.toUpperCase() + "...";
+        });
+
+        socket.on('answer', (data) => {
+            // Try to detect category from answer text
+            const answerLower = data.answer.toLowerCase();
+            let detectedCategory = null;
+
+            if (answerLower.includes('book') || answerLower.includes('kitap')) {
+                detectedCategory = 'Books';
+            } else if (answerLower.includes('electronic') || answerLower.includes('elektronik') ||
+                answerLower.includes('laptop') || answerLower.includes('phone') ||
+                answerLower.includes('computer') || answerLower.includes('tablet')) {
+                detectedCategory = 'Electronics';
+            } else if (answerLower.includes('clothing') || answerLower.includes('cloth') ||
+                answerLower.includes('shoe') || answerLower.includes('fashion') ||
+                answerLower.includes('shirt') || answerLower.includes('pants')) {
+                detectedCategory = 'Clothing';
+            } else if (answerLower.includes('home') || answerLower.includes('kitchen') ||
+                answerLower.includes('ev') || answerLower.includes('mutfak')) {
+                detectedCategory = 'Home';
+            }
+
+            // Use detected category or pick random
+            currentCategory = detectedCategory || categories[Math.floor(Math.random() * categories.length)];
+            heldItem.material = categoryMaterials[currentCategory];
+
+            robotState = 'talking';
+            statusOverlay.style.display = 'none';
+            log(data.answer, 'bot');
+            if (data.audio) new Audio('data:audio/mp3;base64,' + data.audio).play();
+
+            // Go back to idle after 10s
+            setTimeout(() => { if (robotState === 'talking') robotState = 'idle'; }, 10000);
+        });
+
+        // --- INPUTS ---
+        const input = document.getElementById('textInput');
+        const micBtn = document.getElementById('micBtn');
+
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const q = input.value;
+                log(q, 'user');
+                socket.emit('ask_question', { question: q });
+                input.value = '';
+            }
+        });
+
+        // Mic
+        let mediaRecorder;
+        micBtn.addEventListener('mousedown', async () => {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            mediaRecorder.ondataavailable = e => {
+                const reader = new FileReader();
+                reader.onloadend = () => socket.emit('audio_chunk', { audio: reader.result.split(',')[1], is_final: true });
+                reader.readAsDataURL(e.data);
+            };
+            mediaRecorder.start();
+            micBtn.classList.add('recording');
+        });
+
+        micBtn.addEventListener('mouseup', () => {
+            if (mediaRecorder) mediaRecorder.stop();
+            micBtn.classList.remove('recording');
+        });
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+
+</html>

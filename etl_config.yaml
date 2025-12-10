@@ -1,0 +1,184 @@
+# ETL Orchestrator Configuration
+# ===============================
+# Configuration file for automated E-Commerce Intelligence Pipeline
+
+# Scheduling Configuration
+scheduling:
+  # When to run the ETL pipeline
+  # Format: cron-style (day_of_week, hour, minute)
+  day_of_week: "mon"  # mon, tue, wed, thu, fri, sat, sun
+  hour: 2             # 0-23 (24-hour format)
+  minute: 0           # 0-59
+  
+  # Timezone (optional, defaults to system timezone)
+  timezone: "Australia/Melbourne"
+  
+  # Retry configuration
+  max_retries: 3
+  retry_delay_seconds: 300  # 5 minutes
+
+# Scraper Configuration
+scraper:
+  target_products: 2000
+  max_categories: 12
+  max_pages_per_category: 2
+  
+  # Rate limiting (to avoid detection)
+  delay_between_pages: [3, 6]     # Random delay in seconds
+  delay_between_categories: [5, 10]
+  
+  # Amazon categories to scrape
+  categories:
+    - "Electronics"
+    - "Books"
+    - "Clothing, Shoes & Jewelry"
+    - "Home & Kitchen"
+    - "Toys & Games"
+    - "Beauty & Personal Care"
+    - "Health & Household"
+    - "Sports & Outdoors"
+    - "Pet Supplies"
+    - "Automotive"
+    - "Tools & Home Improvement"
+    - "Office Products"
+
+# Transformation Configuration
+transformation:
+  # Alternative product matching
+  price_variance_threshold: 0.30  # 30% price difference for similar items
+  min_rating_difference: 0.3      # Minimum rating diff for better alternatives
+  
+  # Inventory thresholds
+  low_stock_multiplier: 0.5  # Below 50% of threshold = low stock alert
+  critical_stock_days: 7     # Days until restock = critical
+  
+  # High performer criteria
+  high_performer_min_rating: 4.6
+  high_performer_min_daily_sales: 30
+  
+  # Warehouse distribution (round-robin)
+  warehouses:
+    - "Melbourne"
+    - "Sydney"
+    - "Brisbane"
+    - "Perth"
+  
+  # Stock simulation ranges
+  stock_range: [50, 500]
+  threshold_range: [10, 50]
+  supplier_lead_time_range: [3, 14]
+  daily_sales_range: [1, 50]
+
+# Data Quality Configuration
+data_quality:
+  # Required fields (pipeline fails if missing)
+  required_fields:
+    - "product_id"
+    - "product_name"
+    - "category"
+    - "price"
+    - "rating"
+  
+  # Validation rules
+  min_price: 0.01
+  max_price: 10000.0
+  min_rating: 0.0
+  max_rating: 5.0
+  min_stock: 0
+  max_stock: 10000
+  
+  # Deduplication
+  deduplicate_by: "product_id"
+  keep_duplicates: "first"  # first or last
+
+# File Management
+files:
+  # Archive old files after N days
+  archive_after_days: 7
+  
+  # Keep archive files for N days before deletion
+  delete_archives_after_days: 30
+  
+  # Output formats
+  output_formats:
+    - "csv"
+    # - "json"  # Uncomment to also save JSON
+    # - "parquet"  # Uncomment for Parquet format
+
+# Vector Database Configuration
+vector_db:
+  # ChromaDB settings
+  collection_name: "products"
+  chunk_size: 1000
+  chunk_overlap: 100
+  
+  # Embeddings
+  embedding_model: "text-embedding-3-small"
+  
+  # Search settings
+  similarity_search_k: 10  # Return top K results
+  
+  # Rebuild strategy
+  rebuild_on_load: true  # Always rebuild vector DB on new data
+
+# Email Notifications
+email:
+  enabled: false  # Set to true to enable email alerts
+  
+  # SMTP Configuration (e.g., Gmail)
+  smtp_server: "smtp.gmail.com"
+  smtp_port: 587
+  use_tls: true
+  
+  # Credentials (use environment variables for security)
+  # ETL_EMAIL_FROM - sender email
+  # ETL_EMAIL_PASSWORD - app password or regular password
+  # ETL_EMAIL_TO - comma-separated recipient emails
+  
+  # Notification triggers
+  notify_on_success: true
+  notify_on_failure: true
+  notify_on_warnings: true
+  
+  # Email template
+  subject_prefix: "[ETL Pipeline]"
+
+# Monitoring & Logging
+monitoring:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  log_level: "INFO"
+  
+  # Log files
+  log_file: "etl_orchestrator.log"
+  max_log_size_mb: 10
+  backup_count: 5
+  
+  # Performance tracking
+  track_metrics: true
+  metrics_file: "etl_metrics.json"
+  
+  # Slack webhook (optional)
+  slack_webhook_url: ""  # Add your Slack webhook URL here
+
+# Test Mode Configuration
+test_mode:
+  # Reduced dataset for testing
+  target_products: 200
+  max_categories: 3
+  skip_email: true
+  skip_slack: true
+
+# Advanced Settings
+advanced:
+  # Parallel processing
+  enable_parallel: false
+  max_workers: 4
+  
+  # Memory optimization
+  chunk_processing: true
+  chunk_size: 1000
+  
+  # Backup strategy
+  create_backup_before_load: true
+  backup_directory: "backups"
+

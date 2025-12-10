@@ -1,0 +1,11 @@
+.env
+*.log
+logs/
+__pycache__/
+*.pyc
+.DS_Store
+chroma_db/
+*.csv
+!data/sample*.csv
+venv/
+.venv/
