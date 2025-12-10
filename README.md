@@ -2,6 +2,10 @@
 
 ![Demo](linkedin_etl_pipeline.gif)
 
+## Video Recording
+
+https://www.canva.com/design/DAG7EgNSrt4/7TaaxGTgwM-H_ksnOBvopw/edit?utm_content=DAG7EgNSrt4&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton
+
 ## 🎯 Objective
 
 Build an intelligent warehouse assistant that can answer natural language questions about product inventory, stock levels, and warehouse operations using RAG (Retrieval-Augmented Generation) and LangChain.
